@@ -144,7 +144,7 @@ sampleRate = 1250000
 output, inputx, inputy = run(sampleRate, seconds, seconds*frequency, True)
 output2, inputx2, inputy2 = run(sampleRate, seconds, seconds*frequency, False)
 
-plt.figure(0)
+plt.subplot(1,2,1)
 plt.plot(inputx)
 plt.plot(inputy)
 plt.plot(output)
@@ -153,7 +153,7 @@ plt.title('Climb')
 plt.legend(['X','Y','Out'])
 #plt.xlim(50,60)
 
-plt.figure(1)
+plt.subplot(1,2,2)
 plt.plot(inputx2)
 plt.plot(inputy2)
 plt.plot(output2)

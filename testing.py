@@ -43,6 +43,50 @@ def initialise(sampleRate):
 
     return in1, out1, out2
 
+def demo(waitTime):
+    print('Beginning Initialisation...')
+    fpga = FPGA()
+
+    # Initialisation of inputs and outputs (oscilliscopes and generators)
+    out1 = fpga.gen(0) # Output to X-Axis K-Cube
+    out2 = fpga.gen(1) # Output to Y-Axis K-Cube
+    in1 = fpga.osc(0, 1.0) # Instance of oscilliscope object for the input
+    # in2 = fpga.osc(1, 1.0) # Unused input
+
+    # Initialise output as sinusoid with no frequency or amplitude, as the output will be
+    # controlled by manipulating the offset as the program runs, this initialisation is
+    # the same for both outputs
+    out1.waveform = out1.sin()
+    out1.frequency = 0.2
+    out1.amplitude = 1.0
+    out1.offset = 0
+    out1.enable = True
+
+    out2.waveform = out2.sin()
+    out2.frequency = 0.2
+    out2.amplitude = 1.0
+    out2.offset = 0
+    out2.enable = True
+
+    in1.decimation = 65536 # 125Msps / 125Ksps = 1000
+    in1.enable = True
+    
+    in1.start()
+    out1.start()
+    out2.start()
+    out1.trigger()
+    out2.trigger()
+    
+    time.sleep(waitTime)
+    
+    in1.stop()
+    out1.stop()
+    out2.stop()
+    print('System Initialised :)')
+    #print(fpga.overlay)
+    
+    return in1.data()
+
 def run(sampleRate, runTime, size, climb):
     """Runs system for set period of time
 
@@ -55,8 +99,8 @@ def run(sampleRate, runTime, size, climb):
     Returns:
     output (np.array): Output of last (size) values read from input
     """
-    
     in1, out1, out2 = initialise(sampleRate)
+
     in1.start()
     out1.start()
     out2.start()
@@ -89,8 +133,8 @@ def run(sampleRate, runTime, size, climb):
         valueY = 0
         if climb:
             direction = random.random()*2*math.pi
-            valueX = math.cos(direction)*0.05
-            valueY = math.sin(direction)*0.05
+            valueX = math.cos(direction)*0.005
+            valueY = math.sin(direction)*0.005
         
         x_val += valueX
         y_val += valueY
@@ -137,32 +181,43 @@ def run(sampleRate, runTime, size, climb):
     return output, inputx, inputy
 
 frequency = 200
-seconds = 5
+seconds = 20
 maxRate = 125000000
 sampleRate = 1250000
 
 output, inputx, inputy = run(sampleRate, seconds, seconds*frequency, True)
 output2, inputx2, inputy2 = run(sampleRate, seconds, seconds*frequency, False)
 
-plt.subplot(1,2,1)
-plt.plot(inputx)
-plt.plot(inputy)
-plt.plot(output)
-plt.ylim(-1, 1)
-plt.title('Climb')
-plt.legend(['X','Y','Out'])
+fig,ax=plt.subplots(nrows=3,ncols=1,sharex=True, figsize=(5,8))
+t=np.array(range(0,len(output)))/200
+ax[0].plot(t, inputx)
+ax[0].plot(t, inputy)
+ax[0].plot(t, output)
+ax[0].set_ylim(-1, 1)
+ax[0].set_title('Climb')
+ax[0].set_ylabel('Voltage (V)')
+ax[0].legend(['X','Y','Out'])
 #plt.xlim(50,60)
 
-plt.subplot(1,2,2)
-plt.plot(inputx2)
-plt.plot(inputy2)
-plt.plot(output2)
-plt.ylim(-1, 1)
-plt.title('No Climb')
-plt.legend(['X','Y','Out'])
+ax[1].plot(t, inputx2)
+ax[1].plot(t, inputy2)
+ax[1].plot(t, output2)
+ax[1].set_ylim(-1, 1)
+ax[1].set_title('No Climb')
+ax[1].set_ylabel('Voltage (V)')
+ax[1].legend(['X','Y','Out'])
+
+ax[2].plot(t, output)
+ax[2].plot(t, output2)
+ax[2].set_ylim(0.0, 0.5)
+ax[2].set_title('Comparison')
+ax[2].set_ylabel('Voltage (V)')
+ax[2].set_xlabel('Time (s))')
+ax[2].legend(['Climb', 'No Climb'])
 #plt.xlim(50,60)
 
 print('Climb Avg: {:2f}V'.format(np.average(output)))
 print('No Climb Avg: {:2f}V'.format(np.average(output2)))
 
+plt.tight_layout()
 plt.show()

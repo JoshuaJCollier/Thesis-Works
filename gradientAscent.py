@@ -1,14 +1,21 @@
 from redpitaya.overlay.mercury import mercury as FPGA
-import IPython.display as ipd
+from numba import jit
 import time
 import math
 import numpy as np
-import scipy as sp
-import matplotlib.pyplot as plt
 import random
-import gc
 
 def initialise(sampleRate):
+    """Initialise the generators and the oscilliscope
+
+    Parameters:
+    sampleRate (int): Number of samples per second
+    
+    Returns:
+    in1: Oscilliscope 1 object
+    out1: Generator 1 object
+    out2: Generator 2 object
+    """
     print('Beginning Initialisation...')
     fpga = FPGA()
 
@@ -44,7 +51,15 @@ def initialise(sampleRate):
     return in1, out1, out2
 
 def demo(waitTime):
-    print('Beginning Initialisation...')
+    """Demonstration function to test outputs, generate slow sinusoid 
+
+    Parameters:
+    waitTime (int): Number of seconds to run demonstration
+    
+    Returns:
+    in1.data() (float[]): Output of oscilliscope
+    """
+    print('Beginning Demonstration...')
     fpga = FPGA()
 
     # Initialisation of inputs and outputs (oscilliscopes and generators)
@@ -53,9 +68,7 @@ def demo(waitTime):
     in1 = fpga.osc(0, 1.0) # Instance of oscilliscope object for the input
     # in2 = fpga.osc(1, 1.0) # Unused input
 
-    # Initialise output as sinusoid with no frequency or amplitude, as the output will be
-    # controlled by manipulating the offset as the program runs, this initialisation is
-    # the same for both outputs
+    # Output 1 and 2 output as sinusoids with 0.2Hz 1V amplitude
     out1.waveform = out1.sin()
     out1.frequency = 0.2
     out1.amplitude = 1.0
@@ -68,9 +81,11 @@ def demo(waitTime):
     out2.offset = 0
     out2.enable = True
 
-    in1.decimation = 65536 # 125Msps / 125Ksps = 1000
+    # Setting input
+    in1.decimation = 65536 
     in1.enable = True
     
+    # Start
     in1.start()
     out1.start()
     out2.start()
@@ -82,11 +97,14 @@ def demo(waitTime):
     in1.stop()
     out1.stop()
     out2.stop()
-    print('System Initialised :)')
-    #print(fpga.overlay)
+    print('Demonstration finished.')
     
     return in1.data()
 
+@jit(nopython=True)
+def gradient():
+
+@jit(nopython=True)
 def run(sampleRate, runTime, size, climb):
     """Runs system for set period of time
 
@@ -100,6 +118,7 @@ def run(sampleRate, runTime, size, climb):
     output (np.array): Output of last (size) values read from input
     """
     in1, out1, out2 = initialise(sampleRate)
+    maxRate = 125000000
 
     in1.start()
     out1.start()
@@ -126,8 +145,6 @@ def run(sampleRate, runTime, size, climb):
     start = time.perf_counter()
     instanceStart = time.perf_counter()
     while((time.perf_counter() - start) <= runTime):
-        #x_val = math.sin(time.perf_counter()*math.pi)
-        #y_val += 0.002
         direction = 0
         valueX = 0
         valueY = 0
@@ -179,45 +196,3 @@ def run(sampleRate, runTime, size, climb):
     out2.stop()
     
     return output, inputx, inputy
-
-frequency = 200
-seconds = 20
-maxRate = 125000000
-sampleRate = 1250000
-
-output, inputx, inputy = run(sampleRate, seconds, seconds*frequency, True)
-output2, inputx2, inputy2 = run(sampleRate, seconds, seconds*frequency, False)
-
-fig,ax=plt.subplots(nrows=3,ncols=1,sharex=True, figsize=(5,8))
-t=np.array(range(0,len(output)))/200
-ax[0].plot(t, inputx)
-ax[0].plot(t, inputy)
-ax[0].plot(t, output)
-ax[0].set_ylim(-1, 1)
-ax[0].set_title('Climb')
-ax[0].set_ylabel('Voltage (V)')
-ax[0].legend(['X','Y','Out'])
-#plt.xlim(50,60)
-
-ax[1].plot(t, inputx2)
-ax[1].plot(t, inputy2)
-ax[1].plot(t, output2)
-ax[1].set_ylim(-1, 1)
-ax[1].set_title('No Climb')
-ax[1].set_ylabel('Voltage (V)')
-ax[1].legend(['X','Y','Out'])
-
-ax[2].plot(t, output)
-ax[2].plot(t, output2)
-ax[2].set_ylim(0.0, 0.5)
-ax[2].set_title('Comparison')
-ax[2].set_ylabel('Voltage (V)')
-ax[2].set_xlabel('Time (s))')
-ax[2].legend(['Climb', 'No Climb'])
-#plt.xlim(50,60)
-
-print('Climb Avg: {:2f}V'.format(np.average(output)))
-print('No Climb Avg: {:2f}V'.format(np.average(output2)))
-
-plt.tight_layout()
-plt.show()

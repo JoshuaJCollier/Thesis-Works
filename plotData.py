@@ -6,9 +6,10 @@ from gradientAscent import *
 frequency = 222
 seconds = 20
 sampleRate = 1250000
-
-output, inputx, inputy = run(sampleRate, seconds, seconds*frequency, True)
-outputNoClimb, inputxNoClimb, inputyNoClimb = run(sampleRate, seconds, seconds*frequency, False)
+stepSize = 0.025
+perIteration = 0.0045
+output, inputx, inputy = run(sampleRate, seconds, seconds*frequency, True, stepSize, perIteration)
+outputNoClimb, inputxNoClimb, inputyNoClimb = run(sampleRate, seconds, seconds*frequency, False, stepSize, perIteration)
 
 print('Climb Avg: {:2f}V'.format(np.average(output)))
 print('No Climb Avg: {:2f}V'.format(np.average(outputNoClimb)))

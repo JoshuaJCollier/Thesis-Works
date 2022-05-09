@@ -102,7 +102,7 @@ def demo(waitTime):
     return in1.data()
 
 #@jit(nopython=True)
-def run(sampleRate, runTime, size, climb):
+def run(sampleRate, runTime, size, climb, stepSize, perIteration):
     """Runs system for set period of time
 
     Parameters:
@@ -141,7 +141,6 @@ def run(sampleRate, runTime, size, climb):
     start = time.perf_counter()
     instanceStart = time.perf_counter()
     
-    perIteration = 0.0045
     avgLength = int(sampleRate/maxRate*perIteration*100000000)
     
     while((time.perf_counter() - start) <= runTime):
@@ -149,8 +148,8 @@ def run(sampleRate, runTime, size, climb):
         valueX = 0
         valueY = 0
         if climb:
-            valueX = (2*random.random()-1)*0.025
-            valueY = (2*random.random()-1)*0.025
+            valueX = (2*random.random()-1)*stepSize
+            valueY = (2*random.random()-1)*stepSize
         
         x_val += valueX
         y_val += valueY
@@ -180,14 +179,13 @@ def run(sampleRate, runTime, size, climb):
         if (output[count%size] < output[(count-1)%size]):
             x_val -= 2*valueX
             y_val -= 2*valueY
-        count += 1
+        # count += 1
 
     end = time.perf_counter() - start
 
     print("Time taken: {:.2f}s, done".format(end))
-    print("Count: {}".format(count))
-    print("System Frequency: {:.2f}Hz".format(count/(end)))
-    print("SYSTEM UPDATED")
+    # print("Count: {}".format(count))
+    # print("System Frequency: {:.2f}Hz".format(count/(end)))
     in1.stop()    
     out1.stop()
     out2.stop()

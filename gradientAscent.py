@@ -1,5 +1,5 @@
 from redpitaya.overlay.mercury import mercury as FPGA
-from numba import jit
+#from numba import jit
 import time
 import math
 import numpy as np
@@ -101,10 +101,7 @@ def demo(waitTime):
     
     return in1.data()
 
-@jit(nopython=True)
-def gradient():
-
-@jit(nopython=True)
+#@jit(nopython=True)
 def run(sampleRate, runTime, size, climb):
     """Runs system for set period of time
 
@@ -137,21 +134,23 @@ def run(sampleRate, runTime, size, climb):
     time.sleep(0.5)
     
     count = 1
-    correct = 1
     
-    perIteration = 0.005
+    perIteration = 0
     
     print('Running')
     start = time.perf_counter()
     instanceStart = time.perf_counter()
+    
+    perIteration = 0.0045
+    avgLength = int(sampleRate/maxRate*perIteration*100000000)
+    
     while((time.perf_counter() - start) <= runTime):
         direction = 0
         valueX = 0
         valueY = 0
         if climb:
-            direction = random.random()*2*math.pi
-            valueX = math.cos(direction)*0.005
-            valueY = math.sin(direction)*0.005
+            valueX = (2*random.random()-1)*0.025
+            valueY = (2*random.random()-1)*0.025
         
         x_val += valueX
         y_val += valueY
@@ -174,23 +173,21 @@ def run(sampleRate, runTime, size, climb):
         #       this means that the maximum frequency of the system without maths is ~27,000Hz
         instanceStart = time.perf_counter()
 
-        output[count%size] = np.average(in1.data(int(sampleRate/maxRate*perIteration*100000000)))
+        output[count%size] = np.average(in1.data(avgLength))
         inputx[count%size] = x_val
         inputy[count%size] = y_val
 
         if (output[count%size] < output[(count-1)%size]):
             x_val -= 2*valueX
             y_val -= 2*valueY
-            correct += 1
         count += 1
 
     end = time.perf_counter() - start
 
     print("Time taken: {:.2f}s, done".format(end))
     print("Count: {}".format(count))
-    print("Corrections: {:2f}%".format((correct*100)/count))
     print("System Frequency: {:.2f}Hz".format(count/(end)))
-    
+    print("SYSTEM UPDATED")
     in1.stop()    
     out1.stop()
     out2.stop()

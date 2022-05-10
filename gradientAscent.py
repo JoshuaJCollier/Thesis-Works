@@ -172,9 +172,9 @@ def run(sampleRate, runTime, size, climb, stepSize, perIteration):
         #       this means that the maximum frequency of the system without maths is ~27,000Hz
         instanceStart = time.perf_counter()
 
-        output[count%size] = np.average(in1.data(avgLength))
         inputx[count%size] = x_val
         inputy[count%size] = y_val
+        output[count%size] = np.average(in1.data(avgLength))
 
         if (output[count%size] < output[(count-1)%size]):
             x_val -= 2*valueX

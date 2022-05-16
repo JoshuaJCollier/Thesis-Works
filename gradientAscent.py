@@ -39,8 +39,9 @@ def initialise(sampleRate):
     out2.amplitude = 0.0
     out2.offset = 0
     out2.enable = True
-
-    in1.decimation = int(125000000/sampleRate) # 125Msps / 125Ksps = 1000
+     
+    maxRate = 125000000
+    in1.decimation = int(maxRate/sampleRate) # 125Msps / 125Ksps = 1000
     in1.enable = True
     # dir(in1)
 
@@ -116,6 +117,8 @@ def run(sampleRate, runTime, size, climb, stepSize, perIteration):
     """
     in1, out1, out2 = initialise(sampleRate)
     maxRate = 125000000
+    halfStep = stepSize/2
+    fullStep = stepSize
 
     in1.start()
     out1.start()
@@ -134,19 +137,22 @@ def run(sampleRate, runTime, size, climb, stepSize, perIteration):
     time.sleep(0.5)
     
     count = 1
-    
-    perIteration = 0
-    
+        
     print('Running')
     start = time.perf_counter()
     instanceStart = time.perf_counter()
     
-    avgLength = int(sampleRate/maxRate*perIteration*100000000)
+    #avgLength = int(sampleRate/maxRate*perIteration*1000000) # int(perIteration/(0.000131*sampleRate/maxRate))
+    #print('AvgLen: {}'.format(avgLength))
+    currOut = 0
     
     while((time.perf_counter() - start) <= runTime):
         direction = 0
         valueX = 0
         valueY = 0
+        lastOut = currOut
+        currentPos = count%size
+        
         if climb:
             valueX = (2*random.random()-1)*stepSize
             valueY = (2*random.random()-1)*stepSize
@@ -172,19 +178,36 @@ def run(sampleRate, runTime, size, climb, stepSize, perIteration):
         #       this means that the maximum frequency of the system without maths is ~27,000Hz
         instanceStart = time.perf_counter()
 
-        inputx[count%size] = x_val
-        inputy[count%size] = y_val
-        output[count%size] = np.average(in1.data(avgLength))
+        inputx[currentPos] = x_val
+        inputy[currentPos] = y_val
+        currOut = np.average(in1.data())
+        
+        #print(in1.pointer)
 
-        if (output[count%size] < output[(count-1)%size]):
+        output[currentPos] = currOut
+        
+        #print(output[count%size] - output[(count-1)%size])
+        if ((currOut+0.005) < lastOut):
             x_val -= 2*valueX
             y_val -= 2*valueY
-        # count += 1
+        elif currOut < lastOut:
+            x_val -= valueX
+            y_val -= valueY
+           
+        '''
+        if currentPos > 20:
+            recentAvg = np.average(output[currentPos-20:currentPos])
+            if ((currOut > (recentAvg - 0.005)) and (currOut < (recentAvg + 0.005))):
+               stepSize = halfStep
+            else:
+               stepSize = fullStep
+        '''
+        count += 1
 
     end = time.perf_counter() - start
 
     print("Time taken: {:.2f}s, done".format(end))
-    # print("Count: {}".format(count))
+    print("Count: {}".format(count))
     # print("System Frequency: {:.2f}Hz".format(count/(end)))
     in1.stop()    
     out1.stop()

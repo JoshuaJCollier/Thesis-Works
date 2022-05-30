@@ -136,6 +136,9 @@ def run(sampleRate, runTime, size, climb, stepSize, perIteration):
     out2.offset = y_val
     time.sleep(0.5)
     
+    # Function of conversion between voltage input from the PD and power, then can be converted to dB later (x (V), y (W))
+    # y = 1.6291E-04*x**6 - 4.7342E-04*x**5 + 3.6564E-04*x**4 + 9.9023E-05*x**3 - 2.2735E-04*x**2 + 1.1912E-04*x + 6.1694E-07
+
     count = 1
         
     print('Running')

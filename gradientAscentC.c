@@ -5,9 +5,13 @@
 #include <math.h>
 #include <string.h>
 #include <time.h>
+#include <sys/mman.h>
 
 // Import for Red Pitaya
 #include "redpitaya/rp.h"
+//#include "common.h"
+//#include "oscilloscope.h"
+//#include "rp_cross.h"
 #include "gradientAscentC.h"
 
 // Save data
@@ -75,7 +79,6 @@ int run(struct run_in in) {
     int pos, i, count;
 
     uint32_t buff_size = 2048; //16384;
-    uint32_t position = 0;
     float *buff = (float *)malloc(buff_size * sizeof(float));
 
     sleep(0.5);
@@ -90,23 +93,20 @@ int run(struct run_in in) {
         last_out = curr_out; // Define last value
         pos = count % in.size;
         
-        // Climb
-        //if (in.climb) {
         x_change = (2.0*((float)rand()/(float)RAND_MAX)-1.0)*fullStep;
         y_change = (2.0*((float)rand()/(float)RAND_MAX)-1.0)*fullStep;
-        //}
 
         x_val += x_change;
         y_val += y_change;
 
-        if (x_val > 1) {
-            x_val = 1;
-        } if (x_val < -1) {
-            x_val = -1;
-        } if (y_val > 1) {
-            y_val = 1;
-        } if (y_val < -1) {
-            y_val = -1;
+        if (x_val > 1.0) {
+            x_val = 1.0;
+        } if (x_val < -1.0) {
+            x_val = -1.0;
+        } if (y_val > 1.0) {
+            y_val = 1.0;
+        } if (y_val < -1.0) {
+            y_val = -1.0;
         }
 
         // Set generator values
@@ -119,7 +119,9 @@ int run(struct run_in in) {
 
         // Get current photodetector value
         rp_AcqGetLatestDataV(RP_CH_1, &buff_size, buff);
-        rp_AcqGetWritePointer(&position);
+        //buff = (float*)((char*)mmap(NULL, OSC_BASE_SIZE, PROT_READ | PROT_WRITE, MAP_SHARED, 0, (OSC_BASE_ADDR >> 20) * sysconf(_SC_PAGESIZE)) + OSC_CHA_OFFSET);
+        printf("%f", buff[0]);
+
         sum = 0.0;
         for (i = 0; i < buff_size; ++i) {
             sum += buff[i];
@@ -129,7 +131,7 @@ int run(struct run_in in) {
         inputx[pos] = x_val;
         inputy[pos] = y_val;
         output[pos] = curr_out;
-        
+
         if ((curr_out + fullStep/10) < last_out) {
             x_val -= 2*x_change;
             y_val -= 2*y_change;
@@ -157,7 +159,8 @@ int run(struct run_in in) {
 }
 
 int main(int argc, char *argv[]) {
-    struct run_in in = {125000000, 4987, true, 0.02, 5.0, 1000.0};
+    float frequency = 1000.0;
+    struct run_in in = {125000000, 4987, true, 0.025*250/frequency, 5.0, frequency};
     run(in);
     return 0;
 }

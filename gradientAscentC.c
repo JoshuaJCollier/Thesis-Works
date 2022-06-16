@@ -6,25 +6,36 @@
 #include <string.h>
 #include <time.h>
 #include <sys/mman.h>
+#include <errno.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <fcntl.h>
+#include "redpitaya/rp.h"
 
 // Import for Red Pitaya
-#include "redpitaya/rp.h"
-//#include "common.h"
-//#include "oscilloscope.h"
-//#include "rp_cross.h"
 #include "gradientAscentC.h"
 
+#define formatBool(b) ((b) ? "true" : "false")
+
+static const int OSC_BASE_ADDR = 0x40100000;
+static const int OSC_BASE_SIZE = 0x30000;
+static const int OSC_CHA_OFFSET = 0x10000;
+
 // Save data
-int save(int size, float* inx, float* iny, float* out) {
-    FILE * file;
-    file = fopen("/root/RedPitaya/joshThesis/saveData.csv", "w");
+int save(struct run_in in, float* inx, float* iny, float* out) {
+    char fileName[100];
+    // make the name of the save file relative to datetime and in
+    sprintf(fileName, "/root/RedPitaya/joshThesis/saves/saveDataFreq%iHzTime%isClimb%iGrad%iSmart%i.csv", (int)in.frequency, (int)in.runTime, (int)in.climb, (int)in.climbGrad, (int)in.climbSmart);
+    FILE *file = fopen(fileName, "w");
 
     if(file == NULL) {
         printf("Unable to create file.\n");
         exit(EXIT_FAILURE);
     }
+    
+    fprintf(file, "Run Details:, X Values, Y Values, Output, freq: %fHz, climb: %s, gradAsc: %s, smart: %s, runTime: %fs done\n", in.frequency, formatBool(in.climb), formatBool(in.climbGrad), formatBool(in.climbSmart), in.runTime);
 
-    for (int i = 0; i < size; i++) {
+    for (int i = 0; i < in.size; i++) {
         fprintf(file, "%i,%f,%f,%f\n", i, inx[i], iny[i], out[i]);
     }
 
@@ -34,16 +45,12 @@ int save(int size, float* inx, float* iny, float* out) {
     return 0;
 }
 
-// Main run function
-int run(struct run_in in) {
-    printf("Running...\n");
+int initialise() {
+    printf("Initalising...\n");
     // Check API connection
     if(rp_Init() != RP_OK){
-        fprintf(stderr, "Rp api init failed!\n");
+        fprintf(stderr, "Red Pitaya API init failed!\n");
     }
-
-    // Seed Random
-    srand(time(NULL));
 
     // Reset Generator and Acquisition
     rp_GenReset();
@@ -62,105 +69,188 @@ int run(struct run_in in) {
     rp_GenWaveform(RP_CH_2, RP_WAVEFORM_SINE);
     rp_GenOffset(RP_CH_2, 0.0);
     rp_GenOutEnable(RP_CH_2);
-
+    
     // Initialise Acquisition (for photodetector)
     rp_AcqSetDecimation(RP_DEC_1);
     
-    // Initialise Variables
-    //int maxRate = 125000000;
-    //double halfStep = in.stepSize/2;
-    double fullStep = in.stepSize;
-
-    float inputx[in.size];
-    float inputy[in.size];
-    float output[in.size];
-    float x_val, y_val, x_change, y_change, last_out, curr_out, sum;
-    clock_t start, end, instance_time;
-    int pos, i, count;
-
-    uint32_t buff_size = 2048; //16384;
-    float *buff = (float *)malloc(buff_size * sizeof(float));
-
-    sleep(0.5);
-
     // Start
     rp_GenOutEnable(RP_CH_1);
     rp_GenOutEnable(RP_CH_2);
     rp_AcqStart();
-    start = clock();
+    printf("Initialised.\n");
+
+    return 0;
+}
+
+void generateMove(float stepSize, float* x_val, float* y_val, float* x_change, float* y_change) {
+    *x_change = (2.0*((float)rand()/(float)RAND_MAX)-1.0)*stepSize;
+    *y_change = (2.0*((float)rand()/(float)RAND_MAX)-1.0)*stepSize;
     
+    *x_val += *x_change;
+    *y_val += *y_change;
+    
+    if (*x_val > 1.0) {
+        *x_val = 1.0;
+    } 
+    if (*x_val < -1.0) {
+        *x_val = -1.0;
+    } 
+    if (*y_val > 1.0) {
+        *y_val = 1.0;
+    } 
+    if (*y_val < -1.0) {
+        *y_val = -1.0;
+    }
+}
+
+void correctOut(float* currOut, float lastOut, bool climbGrad, bool climbSmart, float stepSize, float* x_val, float* y_val, float x_change, float y_change) {
+    if (climbGrad) {
+        *x_val += *currOut-lastOut;
+        *y_val += *currOut-lastOut;
+    } else if (climbSmart) {
+        // Take step back if we arent progressing forward,
+        if (*currOut < lastOut) {
+            *x_val -= x_change;
+            *y_val -= y_change;
+            *currOut = lastOut;
+        }
+    } else {
+        // Without gradient consideration, either make big or small step back
+        if ((*currOut + stepSize/20) < lastOut) {
+            *x_val -= 2*x_change;
+            *y_val -= 2*y_change;
+        } else if (*currOut < lastOut) {
+            *x_val -= x_change;
+            *y_val -= y_change;
+        }
+    }
+}
+
+// Main run function
+int run(struct run_in in) {
+    srand(time(NULL));
+
+    initialise();
+    printf("Running...\n");    
+
+    /* MMAP Buffer Attempt
+    int fd = open("/dev/mem", O_RDWR | O_SYNC);
+    float* buff = (float*)(mmap(NULL, OSC_BASE_SIZE, PROT_READ | PROT_WRITE, MAP_SHARED, fd, OSC_BASE_ADDR + OSC_CHA_OFFSET);
+    */
+
+    // Initialise Buffer
+    uint32_t buff_size = in.buffSize; //16384 max
+    float *buff = (float *)malloc(buff_size * sizeof(float));
+
+    // Initialise Variables
+    float inputx[in.size];
+    float inputy[in.size];
+    float output[in.size];
+    float x_val = 0;
+    float y_val = 0;
+    float x_change = 0;
+    float y_change = 0;
+    float currOut = 0;
+    float lastOut = 0;
+    float sum = 0;
+    float currentStep = in.stepSize;
+
+    // Position
+    int pos = 0;
+    int count = 0;
+
+    // Timing
+    clock_t start, end, instance_time;
+    start = clock();
+
+    // Run Loop
     while (((double) (clock() - start)) / CLOCKS_PER_SEC < in.runTime) {
-        last_out = curr_out; // Define last value
+        // Init for loop
+        lastOut = currOut; // Save last value
         pos = count % in.size;
+        sum = 0.0;
         
-        x_change = (2.0*((float)rand()/(float)RAND_MAX)-1.0)*fullStep;
-        y_change = (2.0*((float)rand()/(float)RAND_MAX)-1.0)*fullStep;
-
-        x_val += x_change;
-        y_val += y_change;
-
-        if (x_val > 1.0) {
-            x_val = 1.0;
-        } if (x_val < -1.0) {
-            x_val = -1.0;
-        } if (y_val > 1.0) {
-            y_val = 1.0;
-        } if (y_val < -1.0) {
-            y_val = -1.0;
+        if (in.climb) {
+            generateMove(currentStep, &x_val, &y_val, &x_change, &y_change);
         }
 
         // Set generator values
         rp_GenOffset(RP_CH_1, x_val);
         rp_GenOffset(RP_CH_2, y_val);
 
-        // Wait for values from photodetector
+        // Synchronise System (bring it in like with frequency set)
         while ((((double) (clock() - instance_time)) / (double)CLOCKS_PER_SEC) < (1.0/in.frequency)) {continue;}
         instance_time = clock();
 
         // Get current photodetector value
         rp_AcqGetLatestDataV(RP_CH_1, &buff_size, buff);
-        //buff = (float*)((char*)mmap(NULL, OSC_BASE_SIZE, PROT_READ | PROT_WRITE, MAP_SHARED, 0, (OSC_BASE_ADDR >> 20) * sysconf(_SC_PAGESIZE)) + OSC_CHA_OFFSET);
-        printf("%f", buff[0]);
-
-        sum = 0.0;
-        for (i = 0; i < buff_size; ++i) {
+        for (int i = 0; i < buff_size; ++i) {
             sum += buff[i];
         }
+        currOut = sum/buff_size;
+        correctOut(&currOut, lastOut, in.climbGrad, in.climbSmart, in.stepSize, &x_val, &y_val, x_change, y_change);
 
-        curr_out = sum/buff_size;
         inputx[pos] = x_val;
         inputy[pos] = y_val;
-        output[pos] = curr_out;
-
-        if ((curr_out + fullStep/10) < last_out) {
-            x_val -= 2*x_change;
-            y_val -= 2*y_change;
-        } else {
-            x_val -= x_change;
-            y_val -= y_change;
-        }
-
+        output[pos] = currOut;
         count += 1;
     }
 
     end = ((double) (clock() - start)) / CLOCKS_PER_SEC;
 
-    printf("Time taken: %lis, done\n", end);
+    printf("\n");
+    printf("Run Finished with freq: %fHz, climb: %s, gradAsc: %s, smart: %s, runTime: %fs done\n", in.frequency, formatBool(in.climb), formatBool(in.climbGrad), formatBool(in.climbSmart), in.runTime);
+    printf("Time taken: %lis\n", end);
     printf("Count: %i\n", count);
-    printf("Output: %f\n", curr_out);
-    printf("X Val: %f\n", x_val);
-    printf("Y Val: %f\n", y_val);
+    printf("Last Output: %f\n", currOut);
+    printf("Last X Value: %f\n", x_val);
+    printf("Last Y Value: %f\n", y_val);
+    printf("\n");
 
-    save(in.size, inputx, inputy, output);
+    save(in, inputx, inputy, output);
     rp_AcqStop();
-    free(buff);
     rp_Release();
+    free(buff);    
     return 0;
 }
 
 int main(int argc, char *argv[]) {
-    float frequency = 1000.0;
-    struct run_in in = {125000000, 4987, true, 0.025*250/frequency, 5.0, frequency};
+    // Variable Defaults
+    float frequency = 500.0;
+    float runTime = 10.0;
+    float stepSize = 0.025*250/frequency;
+    uint32_t buffSize = 4096;
+    bool climb = false;
+    bool climbGrad = false;
+    bool climbSmart = false;
+    int climbMulti = 0;
+
+    for (int i = 0; i < argc; i++) {
+        printf("argv[%i]: %s\n", i, argv[i]);
+        
+        if (strcmp(argv[i],"-freq") == 0) {
+            frequency = atof(argv[i+1]);
+        } else if (strcmp(argv[i],"-time") == 0) {
+            runTime = atof(argv[i+1]);
+        } else if (strcmp(argv[i],"-step") == 0) {
+            stepSize = atof(argv[i+1]);
+        } else if (strcmp(argv[i],"-climb") == 0) {
+            climb = true;
+        } else if (strcmp(argv[i],"-grad") == 0) {
+            climbGrad = true;
+        } else if (strcmp(argv[i],"-smart") == 0) {
+            climbSmart = true;
+        } else if (strcmp(argv[i],"-multi") == 0) {
+            climbMulti = atoi(argv[i+1]);
+        } else if (strcmp(argv[i],"-buff") == 0) {
+            buffSize = (uint32_t) atoi(argv[i+1]);
+        }
+    }
+
+    int runReturnSize = frequency*runTime;
+    int sampleFrequency = 125000000;
+    struct run_in in = {sampleFrequency, runReturnSize, climb, climbGrad, climbSmart, climbMulti, stepSize, runTime, frequency, buffSize};
     run(in);
+
     return 0;
 }

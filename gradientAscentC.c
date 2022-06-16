@@ -109,20 +109,25 @@ void generateMove(float stepSize, float* x_val, float* y_val, float* x_change, f
     }
 }
 
-void correctOut(float* currOut, float lastOut, bool climbGrad, bool climbSmart, float stepSize, float* x_val, float* y_val, float x_change, float y_change) {
-    if (climbGrad) {
-        *x_val += *currOut-lastOut;
-        *y_val += *currOut-lastOut;
-    } else if (climbSmart) {
+void correctOut(float* currOut, float lastOut, struct run_in in, float* x_val, float* y_val, float x_change, float y_change) {
+    if (in.climbGrad) {
+        *x_val += (*currOut-lastOut)*in.climbGradLearning;
+        *y_val += (*currOut-lastOut)*in.climbGradLearning;
+    } else if (in.climbSmart) {
         // Take step back if we arent progressing forward,
         if (*currOut < lastOut) {
             *x_val -= x_change;
             *y_val -= y_change;
             *currOut = lastOut;
         }
+    } else if (in.climbMulti) {
+        // Make climbMultiNum moves.
+        // ----------------- WORK IN PROGRESS -----------------
+        *x_val += x_change;
+        *y_val += y_change;
     } else {
         // Without gradient consideration, either make big or small step back
-        if ((*currOut + stepSize/20) < lastOut) {
+        if ((*currOut + in.stepSize/20) < lastOut) {
             *x_val -= 2*x_change;
             *y_val -= 2*y_change;
         } else if (*currOut < lastOut) {
@@ -139,6 +144,7 @@ int run(struct run_in in) {
     initialise();
     printf("Running...\n");    
 
+    // ----------------- WORK IN PROGRESS -----------------
     /* MMAP Buffer Attempt
     int fd = open("/dev/mem", O_RDWR | O_SYNC);
     float* buff = (float*)(mmap(NULL, OSC_BASE_SIZE, PROT_READ | PROT_WRITE, MAP_SHARED, fd, OSC_BASE_ADDR + OSC_CHA_OFFSET);
@@ -159,7 +165,6 @@ int run(struct run_in in) {
     float currOut = 0;
     float lastOut = 0;
     float sum = 0;
-    float currentStep = in.stepSize;
 
     // Position
     int pos = 0;
@@ -177,7 +182,7 @@ int run(struct run_in in) {
         sum = 0.0;
         
         if (in.climb) {
-            generateMove(currentStep, &x_val, &y_val, &x_change, &y_change);
+            generateMove(in.stepSize, &x_val, &y_val, &x_change, &y_change);
         }
 
         // Set generator values
@@ -194,7 +199,7 @@ int run(struct run_in in) {
             sum += buff[i];
         }
         currOut = sum/buff_size;
-        correctOut(&currOut, lastOut, in.climbGrad, in.climbSmart, in.stepSize, &x_val, &y_val, x_change, y_change);
+        correctOut(&currOut, lastOut, in, &x_val, &y_val, x_change, y_change);
 
         inputx[pos] = x_val;
         inputy[pos] = y_val;

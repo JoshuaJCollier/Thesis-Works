@@ -82,9 +82,15 @@ int initialise() {
     return 0;
 }
 
-void generateMove(float stepSize, float* x_val, float* y_val, float* x_change, float* y_change) {
-    *x_change = (2.0*((float)rand()/(float)RAND_MAX)-1.0)*stepSize;
-    *y_change = (2.0*((float)rand()/(float)RAND_MAX)-1.0)*stepSize;
+void generateMove(float stepSize, float* x_val, float* y_val, float* x_change, float* y_change, bool climbGrad) {
+    if (climbGrad) {
+        float angle = M_PI*(2.0*((float)rand()/(float)RAND_MAX)-1.0);
+        *x_change = cos(angle);
+        *y_change = sin(angle);
+    } else {
+        *x_change = (2.0*((float)rand()/(float)RAND_MAX)-1.0)*stepSize;
+        *y_change = (2.0*((float)rand()/(float)RAND_MAX)-1.0)*stepSize;
+    }
     
     *x_val += *x_change;
     *y_val += *y_change;

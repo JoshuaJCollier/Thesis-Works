@@ -226,10 +226,12 @@ int main(int argc, char *argv[]) {
     float runTime = 10.0;
     float stepSize = 0.025*250/frequency;
     uint32_t buffSize = 4096;
-    bool climb = false;
-    bool climbGrad = false;
-    bool climbSmart = false;
-    int climbMulti = 0;
+    bool climb = true; // Used to tell it to use a climbing algorithm (otherwise it is just a test)
+    bool climbGrad = false; // Gradient Proportional Ascent
+    bool climbSmart = false; // Consideration of back data
+    bool climbMulti = false; // Make multiple moves before deciding where to end up
+    float climbGradLearning = 0.5; // Learning factor for gradient proportional ascent
+    int climbMultiNum = 3; // 
 
     for (int i = 0; i < argc; i++) {
         printf("argv[%i]: %s\n", i, argv[i]);
@@ -240,14 +242,24 @@ int main(int argc, char *argv[]) {
             runTime = atof(argv[i+1]);
         } else if (strcmp(argv[i],"-step") == 0) {
             stepSize = atof(argv[i+1]);
-        } else if (strcmp(argv[i],"-climb") == 0) {
-            climb = true;
+        } else if (strcmp(argv[i],"-test") == 0) {
+            climb = false;
         } else if (strcmp(argv[i],"-grad") == 0) {
             climbGrad = true;
+            if (i < argc-1) {
+                if (argv[i+1][0] = '-') {
+                    climbGradLearning = atof(argv[i+1]);
+                }
+            }
         } else if (strcmp(argv[i],"-smart") == 0) {
             climbSmart = true;
         } else if (strcmp(argv[i],"-multi") == 0) {
-            climbMulti = atoi(argv[i+1]);
+            climbMulti = true;
+            if (i < argc-1) {
+                if (argv[i+1][0] = '-') {
+                    climbMultiNumber = atoi(argv[i+1]);
+                }
+            }
         } else if (strcmp(argv[i],"-buff") == 0) {
             buffSize = (uint32_t) atoi(argv[i+1]);
         }
@@ -255,7 +267,7 @@ int main(int argc, char *argv[]) {
 
     int runReturnSize = frequency*runTime;
     int sampleFrequency = 125000000;
-    struct run_in in = {sampleFrequency, runReturnSize, climb, climbGrad, climbSmart, climbMulti, stepSize, runTime, frequency, buffSize};
+    struct run_in in = {sampleFrequency, runReturnSize, climb, climbGrad, climbSmart, climbMulti, climbGradLearning, climbMultiNumber, stepSize, runTime, frequency, buffSize};
     run(in);
 
     return 0;

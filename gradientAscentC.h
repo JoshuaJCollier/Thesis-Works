@@ -5,7 +5,9 @@ typedef struct run_in {
     bool climb; // Use the climbing algorithm
     bool climbGrad; // Use the gradient aspect in climbing algorithm
     bool climbSmart; // Use past output values for maths
-    int climbMulti; // Use for multiple moves per iteration
+    bool climbMulti; // Use for multiple moves per iteration
+    float climbGradLearning;
+    int climbMultiNum;
     float stepSize;
     double runTime;
     double frequency;

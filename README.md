@@ -3,7 +3,7 @@
 C code compiled with make file, using either "make all" or "make gradientAscent"
 To run code, ./gradientAscent -flags
 
-#gradientAscent (1) - Personal Linux man page
+# gradientAscent (1) - Personal Linux man page
 ## **Name**
 **gradientAscent** - Control piezo electric actuators to move mirror in response to changing coupled power
   

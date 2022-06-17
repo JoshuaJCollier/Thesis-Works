@@ -14,9 +14,9 @@ To run code, ./gradientAscent -flags
 **gradientAscent** is a C program written for this thesis that is used to operate 
 
 ###### The options are as follows:
-&nbsp;&nbsp;&nbsp;&nbsp;\-**test**      Forces **gradientAscent** into test mode (no climbing)
+&nbsp;&nbsp;&nbsp;&nbsp;\-**test**&nbsp;&nbsp;&nbsp;&nbsp;Forces **gradientAscent** into test mode (no climbing)
 
-&nbsp;&nbsp;&nbsp;&nbsp;\-**smart**     Forces **gradientAscent** into smart mode which avoids over back-stepping and thus makes smarter local decisions
+&nbsp;&nbsp;&nbsp;&nbsp;\-**smart**&nbsp;&nbsp;&nbsp;Forces **gradientAscent** into smart mode which avoids over back-stepping and thus makes smarter local decisions
 
 &nbsp;&nbsp;&nbsp;&nbsp;\-**freq** _frequency_ \
 &nbsp;&nbsp;&nbsp;&nbsp;Sets the control frequency of the system to _frequency_ Hz. Without this flag the default value is 500 Hz.

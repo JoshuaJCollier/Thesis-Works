@@ -238,6 +238,7 @@ int main(int argc, char *argv[]) {
     float climbGradLearning = 0.5; // Learning factor for gradient proportional ascent
     int climbMultiNum = 3; // 
 
+    // Flags
     for (int i = 0; i < argc; i++) {
         printf("argv[%i]: %s\n", i, argv[i]);
         

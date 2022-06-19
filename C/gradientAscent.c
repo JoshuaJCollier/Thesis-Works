@@ -13,7 +13,7 @@
 #include "redpitaya/rp.h"
 
 // Import for Red Pitaya
-#include "gradientAscentC.h"
+#include "gradientAscent.h"
 
 #define formatBool(b) ((b) ? "true" : "false")
 
@@ -22,10 +22,14 @@ static const int OSC_BASE_SIZE = 0x30000;
 static const int OSC_CHA_OFFSET = 0x10000;
 
 // Save data
-int save(struct run_in in, float* inx, float* iny, float* out) {
-    char fileName[100];
+int save(struct run_in in, int length, float* inx, float* iny, float* out) {
+    printf("Saving...\n");
+    char fileName[150];
+    time_t t = time(NULL);
+    struct tm tm = *localtime(&t);
+    float outAvg = 0;
     // make the name of the save file relative to datetime and in
-    sprintf(fileName, "/root/RedPitaya/joshThesis/saves/saveDataFreq%iHzTime%isClimb%iGrad%iSmart%i.csv", (int)in.frequency, (int)in.runTime, (int)in.climb, (int)in.climbGrad, (int)in.climbSmart);
+    sprintf(fileName, "/root/RedPitaya/joshThesis/saves/saveData_Freq%iHz_Time%is_Climb%i_Grad%i_%i_Smart%i_on_%02d_%02d_%02d_at_%02d_%02d.csv", (int)in.frequency, (int)in.runTime, (int)in.climb, (int)in.climbGrad, (int)in.climbGradLearning, (int)in.climbSmart, tm.tm_mday, tm.tm_mon + 1,tm.tm_year + 1900, tm.tm_hour, tm.tm_min);
     FILE *file = fopen(fileName, "w");
 
     if(file == NULL) {
@@ -33,14 +37,18 @@ int save(struct run_in in, float* inx, float* iny, float* out) {
         exit(EXIT_FAILURE);
     }
     
-    fprintf(file, "Run Details:, X Values, Y Values, Output, freq: %fHz, climb: %s, gradAsc: %s, smart: %s, runTime: %fs done\n", in.frequency, formatBool(in.climb), formatBool(in.climbGrad), formatBool(in.climbSmart), in.runTime);
+    fprintf(file, "Run Details:, X Values, Y Values, Output\n");
 
-    for (int i = 0; i < in.size; i++) {
+    for (int i = 0; i < length; i++) {
         fprintf(file, "%i,%f,%f,%f\n", i, inx[i], iny[i], out[i]);
+        outAvg += out[i];
     }
+    outAvg = outAvg/length;
 
+    printf("Output Average: %f\n", outAvg);
     /* Close file to save file data */
     fclose(file);
+    printf("Saved.\n");
 
     return 0;
 }
@@ -85,8 +93,8 @@ int initialise() {
 void generateMove(float stepSize, float* x_val, float* y_val, float* x_change, float* y_change, bool climbGrad) {
     if (climbGrad) {
         float angle = M_PI*(2.0*((float)rand()/(float)RAND_MAX)-1.0);
-        *x_change = cos(angle);
-        *y_change = sin(angle);
+        *x_change = cos(angle)*stepSize;
+        *y_change = sin(angle)*stepSize;
     } else {
         *x_change = (2.0*((float)rand()/(float)RAND_MAX)-1.0)*stepSize;
         *y_change = (2.0*((float)rand()/(float)RAND_MAX)-1.0)*stepSize;
@@ -111,8 +119,8 @@ void generateMove(float stepSize, float* x_val, float* y_val, float* x_change, f
 
 void correctOut(float* currOut, float lastOut, struct run_in in, float* x_val, float* y_val, float x_change, float y_change) {
     if (in.climbGrad) {
-        *x_val += (*currOut-lastOut)*in.climbGradLearning;
-        *y_val += (*currOut-lastOut)*in.climbGradLearning;
+        *x_val += x_change/in.stepSize*(*currOut-lastOut)*in.climbGradLearning;
+        *y_val += y_change/in.stepSize*(*currOut-lastOut)*in.climbGradLearning;
     } else if (in.climbSmart) {
         // Take step back if we arent progressing forward,
         if (*currOut < lastOut) {
@@ -134,6 +142,19 @@ void correctOut(float* currOut, float lastOut, struct run_in in, float* x_val, f
             *x_val -= x_change;
             *y_val -= y_change;
         }
+    }
+
+    if (*x_val > 1.0) {
+        *x_val = 1.0;
+    } 
+    if (*x_val < -1.0) {
+        *x_val = -1.0;
+    } 
+    if (*y_val > 1.0) {
+        *y_val = 1.0;
+    } 
+    if (*y_val < -1.0) {
+        *y_val = -1.0;
     }
 }
 
@@ -182,7 +203,7 @@ int run(struct run_in in) {
         sum = 0.0;
         
         if (in.climb) {
-            generateMove(in.stepSize, &x_val, &y_val, &x_change, &y_change);
+            generateMove(in.stepSize, &x_val, &y_val, &x_change, &y_change, in.climbGrad);
         }
 
         // Set generator values
@@ -199,26 +220,27 @@ int run(struct run_in in) {
             sum += buff[i];
         }
         currOut = sum/buff_size;
-        correctOut(&currOut, lastOut, in, &x_val, &y_val, x_change, y_change);
-
+        
         inputx[pos] = x_val;
         inputy[pos] = y_val;
         output[pos] = currOut;
+        correctOut(&currOut, lastOut, in, &x_val, &y_val, x_change, y_change);
+        
         count += 1;
     }
 
     end = ((double) (clock() - start)) / CLOCKS_PER_SEC;
 
     printf("\n");
-    printf("Run Finished with freq: %fHz, climb: %s, gradAsc: %s, smart: %s, runTime: %fs done\n", in.frequency, formatBool(in.climb), formatBool(in.climbGrad), formatBool(in.climbSmart), in.runTime);
+    printf("Run Finished with freq: %.2fHz, runTime: %.2fs, climb: %s, gradAsc: %s, smart: %s done\n", in.frequency, in.runTime, formatBool(in.climb), formatBool(in.climbGrad), formatBool(in.climbSmart));
     printf("Time taken: %lis\n", end);
     printf("Count: %i\n", count);
-    printf("Last Output: %f\n", currOut);
-    printf("Last X Value: %f\n", x_val);
-    printf("Last Y Value: %f\n", y_val);
+    printf("Last Output: %04f\n", currOut);
+    printf("Last X Value: %04f\n", x_val);
+    printf("Last Y Value: %04f\n", y_val);
     printf("\n");
 
-    save(in, inputx, inputy, output);
+    save(in, count, inputx, inputy, output);
     rp_AcqStop();
     rp_Release();
     free(buff);    
@@ -229,7 +251,6 @@ int main(int argc, char *argv[]) {
     // Variable Defaults
     float frequency = 500.0;
     float runTime = 10.0;
-    float stepSize = 0.025*250/frequency;
     uint32_t buffSize = 4096;
     bool climb = true; // Used to tell it to use a climbing algorithm (otherwise it is just a test)
     bool climbGrad = false; // Gradient Proportional Ascent
@@ -237,6 +258,7 @@ int main(int argc, char *argv[]) {
     bool climbMulti = false; // Make multiple moves before deciding where to end up
     float climbGradLearning = 0.5; // Learning factor for gradient proportional ascent
     int climbMultiNum = 3; // 
+    float stepSize = 0.025*250/frequency;;
 
     // Flags
     for (int i = 0; i < argc; i++) {
@@ -253,7 +275,7 @@ int main(int argc, char *argv[]) {
         } else if (strcmp(argv[i],"-grad") == 0) {
             climbGrad = true;
             if (i < argc-1) {
-                if (argv[i+1][0] = '-') {
+                if (argv[i+1][0] == '-') {
                     climbGradLearning = atof(argv[i+1]);
                 }
             }
@@ -262,8 +284,8 @@ int main(int argc, char *argv[]) {
         } else if (strcmp(argv[i],"-multi") == 0) {
             climbMulti = true;
             if (i < argc-1) {
-                if (argv[i+1][0] = '-') {
-                    climbMultiNumber = atoi(argv[i+1]);
+                if (argv[i+1][0] == '-') {
+                    climbMultiNum = atoi(argv[i+1]);
                 }
             }
         } else if (strcmp(argv[i],"-buff") == 0) {
@@ -272,8 +294,9 @@ int main(int argc, char *argv[]) {
     }
 
     int runReturnSize = frequency*runTime;
+    printf("Run Return Size: %i\n", runReturnSize);
     int sampleFrequency = 125000000;
-    struct run_in in = {sampleFrequency, runReturnSize, climb, climbGrad, climbSmart, climbMulti, climbGradLearning, climbMultiNumber, stepSize, runTime, frequency, buffSize};
+    struct run_in in = {sampleFrequency, runReturnSize, climb, climbGrad, climbSmart, climbMulti, climbGradLearning, climbMultiNum, stepSize, runTime, frequency, buffSize};
     run(in);
 
     return 0;

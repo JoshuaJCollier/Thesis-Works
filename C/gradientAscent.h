@@ -18,4 +18,4 @@ int initialise();
 int save(struct run_in in, int length, float* inx, float* iny, float* out);
 void generateMove(float stepSize, float* x_val, float* y_val, float* x_change, float* y_change, bool climbGrad);
 void correctOut(float* currOut, float lastOut, struct run_in in, float* x_val, float* y_val, float x_change, float y_change);
-int run(struct run_in in);
+int run(struct run_in in, int nth);

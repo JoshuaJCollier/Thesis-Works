@@ -17,7 +17,7 @@
 
 #define formatBool(b) ((b) ? "true" : "false")
 
-static const int OSC_BASE_ADDR = 0x40100000;
+static const uint32_t OSC_BASE_ADDR = 0x40100000;
 static const int OSC_BASE_SIZE = 0x30000;
 static const int OSC_CHA_OFFSET = 0x10000;
 
@@ -29,7 +29,7 @@ int save(struct run_in in, int length, float* inx, float* iny, float* out) {
     struct tm tm = *localtime(&t);
     float outAvg = 0;
     // make the name of the save file relative to datetime and in
-    sprintf(fileName, "/root/RedPitaya/joshThesis/saves/saveData_Freq%iHz_Time%is_Climb%i_Grad%i_%i_Smart%i_on_%02d_%02d_%02d_at_%02d_%02d.csv", (int)in.frequency, (int)in.runTime, (int)in.climb, (int)in.climbGrad, (int)in.climbGradLearning, (int)in.climbSmart, tm.tm_mday, tm.tm_mon + 1,tm.tm_year + 1900, tm.tm_hour, tm.tm_min);
+    sprintf(fileName, "/root/RedPitaya/joshThesis/saves/saveData_Freq%iHz_Time%is_on_%02d_%02d_%02d_at_%02d_%02d.csv", (int)in.frequency, (int)in.runTime, tm.tm_mday, tm.tm_mon + 1,tm.tm_year + 1900, tm.tm_hour, tm.tm_min);
     FILE *file = fopen(fileName, "w");
 
     if(file == NULL) {
@@ -37,10 +37,10 @@ int save(struct run_in in, int length, float* inx, float* iny, float* out) {
         exit(EXIT_FAILURE);
     }
     
-    fprintf(file, "Run Details:, X Values, Y Values, Output\n");
+    fprintf(file, "Index,X Values,Y Values,Output\n");
 
     for (int i = 0; i < length; i++) {
-        fprintf(file, "%i,%f,%f,%f\n", i, inx[i], iny[i], out[i]);
+        fprintf(file, "%f,%f,%f,%f\n", (float) i/in.frequency, inx[i], iny[i], out[i]);
         outAvg += out[i];
     }
     outAvg = outAvg/length;
@@ -159,22 +159,25 @@ void correctOut(float* currOut, float lastOut, struct run_in in, float* x_val, f
 }
 
 // Main run function
-int run(struct run_in in) {
+int run(struct run_in in, int nth) {
     srand(time(NULL));
 
     initialise();
-    printf("Running...\n");    
+    printf("Running...\n");
 
     // ----------------- WORK IN PROGRESS -----------------
-    /* MMAP Buffer Attempt
-    int fd = open("/dev/mem", O_RDWR | O_SYNC);
-    float* buff = (float*)(mmap(NULL, OSC_BASE_SIZE, PROT_READ | PROT_WRITE, MAP_SHARED, fd, OSC_BASE_ADDR + OSC_CHA_OFFSET);
-    */
+    /* MMAP Buffer Attempt */
+    // int fd = open("/dev/mem", O_RDWR | O_SYNC);
+    // float* buff = (float*)(mmap(NULL, OSC_BASE_SIZE, PROT_READ | PROT_WRITE, MAP_SHARED, fd, OSC_BASE_ADDR + OSC_CHA_OFFSET));
+    
 
     // Initialise Buffer
     uint32_t buff_size = in.buffSize; //16384 max
     float *buff = (float *)malloc(buff_size * sizeof(float));
 
+    int finalCount = in.size/nth;
+    in.size = finalCount;
+    
     // Initialise Variables
     float inputx[in.size];
     float inputy[in.size];
@@ -199,7 +202,7 @@ int run(struct run_in in) {
     while (((double) (clock() - start)) / CLOCKS_PER_SEC < in.runTime) {
         // Init for loop
         lastOut = currOut; // Save last value
-        pos = count % in.size;
+        pos = (count/nth % in.size);
         sum = 0.0;
         
         if (in.climb) {
@@ -224,6 +227,7 @@ int run(struct run_in in) {
         inputx[pos] = x_val;
         inputy[pos] = y_val;
         output[pos] = currOut;
+
         correctOut(&currOut, lastOut, in, &x_val, &y_val, x_change, y_change);
         
         count += 1;
@@ -240,10 +244,11 @@ int run(struct run_in in) {
     printf("Last Y Value: %04f\n", y_val);
     printf("\n");
 
-    save(in, count, inputx, inputy, output);
+    finalCount = (int) count/nth;
+    save(in, finalCount, inputx, inputy, output);
     rp_AcqStop();
     rp_Release();
-    free(buff);    
+    free(buff);
     return 0;
 }
 
@@ -257,8 +262,9 @@ int main(int argc, char *argv[]) {
     bool climbSmart = false; // Consideration of back data
     bool climbMulti = false; // Make multiple moves before deciding where to end up
     float climbGradLearning = 0.5; // Learning factor for gradient proportional ascent
-    int climbMultiNum = 3; // 
-    float stepSize = 0.025*250/frequency;;
+    int climbMultiNum = 3; //
+    float stepSize = 0.025*250/frequency;
+    int nth = 1;
 
     // Flags
     for (int i = 0; i < argc; i++) {
@@ -297,7 +303,7 @@ int main(int argc, char *argv[]) {
     printf("Run Return Size: %i\n", runReturnSize);
     int sampleFrequency = 125000000;
     struct run_in in = {sampleFrequency, runReturnSize, climb, climbGrad, climbSmart, climbMulti, climbGradLearning, climbMultiNum, stepSize, runTime, frequency, buffSize};
-    run(in);
+    run(in, nth);
 
     return 0;
 }
